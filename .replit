@@ -31,7 +31,7 @@ externalPort = 8081
 
 [userenv.shared]
 BOT_NAME = "@MyAI"
-MODEL_NAME = "google/gemini-flash-1.5"
+MODEL_NAME = "google/gemma-4-31b-it:free"
 TEMPERATURE = "0.7"
 MAX_TOKENS = "1000"
 MAX_CONTEXT_MESSAGES = "10"
