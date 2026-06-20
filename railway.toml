@@ -1,8 +1,8 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pip install -r facebook-bot/requirements.txt --break-system-packages"
+buildCommand = "nix-env -iA nixpkgs.python311 nixpkgs.python311Packages.pip && pip install -r facebook-bot/requirements.txt --break-system-packages"
 
 [deploy]
-startCommand = "python -u facebook-bot/main.py"
+startCommand = "python3 -u facebook-bot/main.py"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
