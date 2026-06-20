@@ -1,0 +1,66 @@
+Tạo một project Python hoàn chỉnh cho Facebook AI Bot (giống Meta AI), tối ưu để deploy trên Railway (hoặc bất kỳ platform nào từ Git).
+
+### Yêu cầu chính:
+- Bot trả lời khi bị @mention hoặc nhắn tin riêng.
+- Chỉ hoạt động trong các Group IDs được config.
+- Login Facebook bằng email + password + cookies.
+- Dùng OpenRouter API (dễ thay model).
+- Gửi log thành công và lỗi về Discord Webhook.
+- Chạy lâu dài (Railway).
+
+### Danh sách biến config (quan trọng):
+Sử dụng `python-dotenv` và file `.env`:
+
+- FACEBOOK_EMAIL
+- FACEBOOK_PASSWORD
+- OPENROUTER_API_KEY
+- DISCORD_WEBHOOK_URL
+- BOT_NAME (ví dụ: "@MyAI")
+- MODEL_NAME (mặc định: "google/gemini-flash-1.5" hoặc tương tự)
+- SYSTEM_PROMPT (prompt hệ thống tiếng Việt)
+- GROUP_IDS (danh sách ID group dạng JSON string hoặc list)
+- ALLOWED_USER_IDS (danh sách user ID cho chat riêng, optional)
+- MAX_CONTEXT_MESSAGES (số tin nhắn context)
+- TEMPERATURE (mặc định 0.7)
+- MAX_TOKENS (mặc định 1000)
+
+### Cookies Facebook:
+- Tạo file `cookies.json` riêng.
+- Code tự động load `cookies.json` nếu tồn tại → ưu tiên cookies.
+- Nếu không có cookies thì login bằng email+password rồi save cookies vào file.
+
+### Cấu trúc project:
+1. `main.py` — File chạy chính (với asyncio loop)
+2. `config.py` — Load config từ .env
+3. `facebook_client.py` — Login, load/save cookies, listen & send message
+4. `ai_handler.py` — Gọi OpenRouter API
+5. `logger.py` — Gửi log success + error về Discord webhook (format đẹp)
+6. `requirements.txt`
+7. `.env.example`
+8. `cookies.json` (file mẫu, ban đầu là {})
+9. `README.md` — Hướng dẫn chi tiết
+
+**KHÔNG tạo:**
+- keep_alive.py, Flask server, hoặc bất kỳ Replit-specific code nào.
+- Không cần mocked API.
+
+### Yêu cầu code:
+- Dùng `asyncio` cho listener.
+- Facebook client dùng thư viện fbchat tốt nhất hiện nay (fork như fbchat-muqit hoặc tương đương).
+- Logger: 
+  - Success: người gửi, nội dung hỏi, câu trả lời, group, thời gian.
+  - Error: chi tiết + traceback.
+- Error handling tốt, tự reconnect khi disconnect.
+- Comment code bằng tiếng Việt.
+- Code sạch, modular, dễ deploy trên Railway.
+
+Tạo đầy đủ tất cả các file với code hoàn chỉnh. 
+
+Sau khi tạo xong, đưa ra hướng dẫn:
+- Cách export cookies Facebook → cookies.json
+- Cách lấy Group ID
+- Cách setup file .env
+- Hướng dẫn deploy trên Railway (các bước cơ bản)
+- Lệnh chạy bot
+
+Làm project chuyên nghiệp, production-ready.

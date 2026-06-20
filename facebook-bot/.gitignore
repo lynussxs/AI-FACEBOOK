@@ -1,0 +1,26 @@
+# Biến môi trường — KHÔNG commit lên Git
+.env
+
+# Cookies Facebook — chứa session nhạy cảm
+# (commit cookies.json rỗng {} để Railway nhận diện file)
+# cookies.json  ← bỏ comment dòng này nếu không muốn commit cookies
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Logs
+*.log
+bot.log
+
+# OS
+.DS_Store
+Thumbs.db
