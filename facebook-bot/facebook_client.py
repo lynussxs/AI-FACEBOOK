@@ -1,25 +1,14 @@
 """
-facebook_client.py — Xử lý login Facebook, load/save cookies,
-lắng nghe tin nhắn và gửi phản hồi.
-Sử dụng thư viện fbchat-muqit (fork fbchat tốt nhất hiện nay).
+facebook_client.py — Xử lý kết nối Facebook qua fbchat_muqit.
+Thư viện này là ASYNC hoàn toàn và dùng COOKIES để xác thực (không hỗ trợ email/password).
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-import os
-import time
-from pathlib import Path
 
-# fbchat-muqit cung cấp API đồng bộ; ta wrap bằng asyncio.to_thread
-try:
-    import fbchat
-    from fbchat import Client, Message, ThreadType
-except ImportError as exc:
-    raise ImportError(
-        "Cài fbchat-muqit: pip install fbchat-muqit"
-    ) from exc
+import fbchat_muqit as fb
+from fbchat_muqit import Client, Message, ThreadType, EventType
 
 import config
 import logger
@@ -28,111 +17,90 @@ import ai_handler
 
 class FacebookBot(Client):
     """
-    Kế thừa fbchat.Client để override các callback lắng nghe sự kiện.
+    Kế thừa fbchat_muqit.Client.
+    Override on_message để xử lý tin nhắn đến.
     """
 
-    def __init__(self):
-        super().__init__()
-        self._bot_uid: str | None = None  # UID của bot sau khi login
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Callback: nhận tin nhắn mới
-    # ──────────────────────────────────────────────────────────────────────────
-    def onMessage(
-        self,
-        author_id: str = None,
-        message_object: Message = None,
-        thread_id: str = None,
-        thread_type: ThreadType = None,
-        **kwargs,
-    ):
+    async def on_message(self, event_data: Message) -> None:
         """
         Được gọi mỗi khi có tin nhắn mới.
-        Bot chỉ xử lý nếu:
+        Bot chỉ phản hồi nếu:
         - Không phải tin nhắn của chính mình.
-        - Là group được config (thread_type == GROUP).
-        - Tin nhắn có @mention BOT_NAME, HOẶC là DM từ user được phép.
+        - Group: thread phải nằm trong GROUP_IDS (nếu config) VÀ có @mention BOT_NAME.
+        - DM: sender phải nằm trong ALLOWED_USER_IDS (nếu config).
         """
         # Bỏ qua tin nhắn của chính bot
-        if author_id == self.uid:
+        if str(event_data.sender_id) == str(self.uid):
             return
 
-        text: str = (message_object.text or "").strip()
+        text: str = (event_data.text or "").strip()
+        thread_id: str = str(event_data.thread_id)
+        sender_id: str = str(event_data.sender_id)
+        thread_type: ThreadType = event_data.thread_type
 
-        # Xử lý tin nhắn nhóm
+        # ── Xử lý tin nhắn nhóm (GROUP) ────────────────────────────────────
         if thread_type == ThreadType.GROUP:
             if not self._is_allowed_group(thread_id):
                 return
             if not self._is_mentioned(text):
                 return
-            # Loại bỏ phần @mention khỏi câu hỏi
             question = self._strip_mention(text)
-        # Xử lý DM (nhắn riêng)
+            context_key = f"group_{thread_id}"
+
+        # ── Xử lý DM (nhắn riêng) ──────────────────────────────────────────
         elif thread_type == ThreadType.USER:
-            if config.ALLOWED_USER_IDS and author_id not in config.ALLOWED_USER_IDS:
+            if config.ALLOWED_USER_IDS and sender_id not in [
+                str(uid) for uid in config.ALLOWED_USER_IDS
+            ]:
                 return
             question = text
-            thread_id = f"dm_{author_id}"
+            context_key = f"dm_{sender_id}"
+
         else:
             return
 
         if not question:
             return
 
-        # Lấy tên người gửi
-        sender_name = self._get_user_name(author_id)
-
-        # Chạy async từ sync context (fbchat callback là sync)
-        asyncio.run(
-            self._handle_message(
-                author_id=author_id,
-                sender_name=sender_name,
-                question=question,
-                thread_id=thread_id,
-                original_thread_id=thread_id if thread_type == ThreadType.GROUP else None,
-                thread_type=thread_type,
-            )
+        # Gọi AI và gửi phản hồi
+        await self._respond(
+            sender_id=sender_id,
+            question=question,
+            thread_id=thread_id,
+            context_key=context_key,
         )
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Xử lý tin nhắn: gọi AI rồi gửi phản hồi
+    # Gọi AI → gửi phản hồi
     # ──────────────────────────────────────────────────────────────────────────
-    async def _handle_message(
+    async def _respond(
         self,
-        author_id: str,
-        sender_name: str,
+        sender_id: str,
         question: str,
         thread_id: str,
-        original_thread_id: str | None,
-        thread_type: ThreadType,
-    ):
+        context_key: str,
+    ) -> None:
         try:
-            # Gọi OpenRouter lấy câu trả lời
             answer = await ai_handler.get_ai_response(
-                thread_id=thread_id,
+                thread_id=context_key,
                 user_message=question,
             )
 
-            # Gửi câu trả lời về Facebook (sync, chạy trong thread pool)
-            await asyncio.to_thread(
-                self.send,
-                Message(text=answer),
-                thread_id=original_thread_id or author_id,
-                thread_type=thread_type if original_thread_id else ThreadType.USER,
-            )
+            # Gửi tin nhắn phản hồi
+            await self.send_message(text=answer, thread_id=thread_id)
 
             # Log thành công
             await logger.log_success(
-                sender_name=sender_name,
-                sender_id=author_id,
+                sender_name=sender_id,
+                sender_id=sender_id,
                 question=question,
                 answer=answer,
-                group_id=original_thread_id,
+                group_id=thread_id if context_key.startswith("group_") else None,
             )
 
         except Exception as exc:  # noqa: BLE001
             await logger.log_error(
-                context=f"Xử lý tin nhắn từ {sender_name} ({author_id})",
+                context=f"Xử lý tin nhắn từ user {sender_id}",
                 exc=exc,
                 extra=f"Câu hỏi: {question[:200]}",
             )
@@ -143,8 +111,8 @@ class FacebookBot(Client):
     def _is_allowed_group(self, thread_id: str) -> bool:
         """Kiểm tra group có trong danh sách được phép không."""
         if not config.GROUP_IDS:
-            return True  # Nếu không config → cho phép tất cả
-        return str(thread_id) in [str(g) for g in config.GROUP_IDS]
+            return True  # Không config → cho phép tất cả group
+        return thread_id in [str(g) for g in config.GROUP_IDS]
 
     def _is_mentioned(self, text: str) -> bool:
         """Kiểm tra tin nhắn có @mention tên bot không."""
@@ -154,81 +122,48 @@ class FacebookBot(Client):
         """Loại bỏ @mention khỏi chuỗi và trim."""
         return text.lower().replace(config.BOT_NAME.lower(), "").strip()
 
-    def _get_user_name(self, user_id: str) -> str:
-        """Lấy tên người dùng từ Facebook (fallback về ID nếu lỗi)."""
-        try:
-            user_info = self.fetchUserInfo(user_id)
-            if user_info and user_id in user_info:
-                return user_info[user_id].name
-        except Exception:  # noqa: BLE001
-            pass
-        return f"User({user_id})"
-
-    def onError(self, exception, **kwargs):
-        """Callback khi có lỗi từ fbchat."""
-        asyncio.run(
-            logger.log_error(
-                context="fbchat internal error",
-                exc=exception,
-            )
+    async def on_listening(self) -> None:
+        """Được gọi khi bot bắt đầu lắng nghe."""
+        await logger.log_info(
+            f"✅ {config.BOT_NAME} đang lắng nghe tin nhắn!\n"
+            f"   Bot UID: {self.uid} | Tên: {self.name}\n"
+            f"   Groups: {config.GROUP_IDS or 'Tất cả'}\n"
+            f"   Trigger: {config.BOT_NAME}"
         )
 
 
-# ─── Login / Cookie management ─────────────────────────────────────────────────
+async def create_and_listen() -> None:
+    """
+    Tạo bot, đăng nhập bằng cookies và bắt đầu lắng nghe.
+    Thư viện fbchat_muqit chỉ hỗ trợ đăng nhập qua cookies.json.
 
-def _load_cookies() -> dict | None:
-    """Đọc cookies từ file nếu tồn tại và không rỗng."""
-    path = Path(config.COOKIES_FILE)
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if data:
-                return data
-        except (json.JSONDecodeError, OSError):
-            pass
-    return None
+    Raises:
+        FileNotFoundError: nếu cookies.json không tồn tại hoặc rỗng.
+        Exception: các lỗi kết nối / xác thực khác.
+    """
+    import json
+    from pathlib import Path
 
+    # Kiểm tra cookies.json có dữ liệu không
+    cookies_path = Path(config.COOKIES_FILE)
+    if not cookies_path.exists():
+        raise FileNotFoundError(
+            f"Không tìm thấy '{config.COOKIES_FILE}'. "
+            "Hãy export cookies Facebook và lưu vào file này. "
+            "Xem README.md để biết cách làm."
+        )
 
-def _save_cookies(client: FacebookBot) -> None:
-    """Lưu session cookies hiện tại vào file."""
     try:
-        cookies = client.getSession()
-        Path(config.COOKIES_FILE).write_text(
-            json.dumps(cookies, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        cookies_data = json.loads(cookies_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"'{config.COOKIES_FILE}' không phải JSON hợp lệ: {exc}") from exc
+
+    if not cookies_data:
+        raise ValueError(
+            f"'{config.COOKIES_FILE}' đang rỗng. "
+            "Hãy export cookies Facebook thật và điền vào file này."
         )
-    except Exception as exc:  # noqa: BLE001
-        asyncio.run(logger.log_error("Lưu cookies thất bại", exc))
 
-
-def create_and_login() -> FacebookBot:
-    """
-    Tạo FacebookBot instance và đăng nhập.
-    - Nếu có cookies.json hợp lệ → đăng nhập bằng cookies.
-    - Nếu không → đăng nhập email/password rồi save cookies.
-    """
-    bot = FacebookBot()
-
-    cookies = _load_cookies()
-    if cookies:
-        try:
-            bot.setSession(cookies)
-            asyncio.run(logger.log_info("✅ Đăng nhập bằng cookies thành công."))
-            return bot
-        except fbchat.FBchatException as exc:
-            asyncio.run(
-                logger.log_error(
-                    "Cookies hết hạn hoặc không hợp lệ, thử email/password…",
-                    exc,
-                )
-            )
-
-    # Đăng nhập bằng email + password
-    bot.login(config.FACEBOOK_EMAIL, config.FACEBOOK_PASSWORD)
-    asyncio.run(logger.log_info("✅ Đăng nhập bằng email/password thành công."))
-
-    # Lưu cookies để lần sau dùng lại
-    _save_cookies(bot)
-    asyncio.run(logger.log_info("💾 Cookies đã được lưu vào " + config.COOKIES_FILE))
-
-    return bot
+    # Tạo bot và đăng nhập
+    async with FacebookBot(cookies_file_path=config.COOKIES_FILE) as bot:
+        await bot.listen()

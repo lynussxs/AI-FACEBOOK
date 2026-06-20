@@ -1,5 +1,6 @@
 """
 config.py — Load và quản lý tất cả biến cấu hình từ file .env
+Lưu ý: fbchat_muqit chỉ hỗ trợ xác thực qua cookies.json (không dùng email/password).
 """
 
 import os
@@ -23,9 +24,7 @@ def _parse_list(value: str, default: list = None) -> list:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-# ─── Facebook ──────────────────────────────────────────────────────────────────
-FACEBOOK_EMAIL: str = os.getenv("FACEBOOK_EMAIL", "")
-FACEBOOK_PASSWORD: str = os.getenv("FACEBOOK_PASSWORD", "")
+# ─── Facebook (cookies-only auth) ──────────────────────────────────────────────
 COOKIES_FILE: str = os.getenv("COOKIES_FILE", "cookies.json")
 
 # ─── OpenRouter ────────────────────────────────────────────────────────────────
@@ -55,17 +54,13 @@ ALLOWED_USER_IDS: list[str] = _parse_list(os.getenv("ALLOWED_USER_IDS", "[]"))
 DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # ─── Reconnect ─────────────────────────────────────────────────────────────────
-RECONNECT_DELAY: int = int(os.getenv("RECONNECT_DELAY", "10"))  # giây
+RECONNECT_DELAY: int = int(os.getenv("RECONNECT_DELAY", "10"))   # giây
 MAX_RECONNECT_ATTEMPTS: int = int(os.getenv("MAX_RECONNECT_ATTEMPTS", "0"))  # 0 = vô hạn
 
 
 def validate():
     """Kiểm tra các biến bắt buộc đã được set chưa."""
     errors = []
-    if not FACEBOOK_EMAIL:
-        errors.append("FACEBOOK_EMAIL chưa được set")
-    if not FACEBOOK_PASSWORD:
-        errors.append("FACEBOOK_PASSWORD chưa được set")
     if not OPENROUTER_API_KEY:
         errors.append("OPENROUTER_API_KEY chưa được set")
     if errors:

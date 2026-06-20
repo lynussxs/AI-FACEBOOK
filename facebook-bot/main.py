@@ -1,11 +1,10 @@
 """
 main.py — File chạy chính của Facebook AI Bot.
-Khởi động bot, xử lý reconnect tự động khi mất kết nối.
+Khởi động bot với auto-reconnect khi mất kết nối.
 """
 
 import asyncio
 import sys
-import time
 
 import config
 import logger
@@ -14,10 +13,10 @@ import facebook_client
 
 async def run_bot() -> None:
     """
-    Vòng lặp chính: login → lắng nghe → tự reconnect khi disconnect.
+    Vòng lặp chính: kết nối → lắng nghe → tự reconnect khi disconnect.
     """
     await logger.log_info(
-        f"🚀 Đang khởi động {config.BOT_NAME} | Model: {config.MODEL_NAME}"
+        f"🚀 Khởi động {config.BOT_NAME} | Model: {config.MODEL_NAME}"
     )
 
     attempt = 0
@@ -35,17 +34,16 @@ async def run_bot() -> None:
                 f"🔌 Đang kết nối Facebook… (lần thử #{attempt})"
             )
 
-            # Login (có thể blocking → chạy trong thread pool)
-            bot = await asyncio.to_thread(facebook_client.create_and_login)
+            # Kết nối và lắng nghe (blocking đến khi disconnect)
+            await facebook_client.create_and_listen()
 
-            await logger.log_info(
-                f"✅ Kết nối thành công! Bot đang lắng nghe tin nhắn…\n"
-                f"   Groups được phép: {config.GROUP_IDS or 'Tất cả'}\n"
-                f"   Trigger: {config.BOT_NAME}"
+        except (FileNotFoundError, ValueError) as exc:
+            # Lỗi cấu hình — không cần reconnect, dừng ngay
+            await logger.log_error(
+                context="Lỗi cấu hình cookies",
+                exc=exc,
             )
-
-            # Bắt đầu lắng nghe (blocking call → chạy trong thread pool)
-            await asyncio.to_thread(bot.listen)
+            sys.exit(1)
 
         except KeyboardInterrupt:
             await logger.log_info("⛔ Bot dừng theo yêu cầu người dùng.")
@@ -67,7 +65,7 @@ async def run_bot() -> None:
 
 def main():
     """Entry point."""
-    # Validate config ngay khi khởi động
+    # Validate config khi khởi động
     try:
         config.validate()
     except EnvironmentError as exc:
