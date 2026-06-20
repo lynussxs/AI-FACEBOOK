@@ -1,0 +1,8 @@
+[providers]
+python = {}
+
+[install]
+cmds = ["python3 -m pip install -r facebook-bot/requirements.txt --break-system-packages"]
+
+[start]
+cmd = "python3 -u facebook-bot/main.py"
