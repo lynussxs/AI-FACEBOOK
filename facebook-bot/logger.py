@@ -3,7 +3,6 @@ logger.py — Gửi log thành công và lỗi về Discord Webhook + in ra cons
 """
 
 import traceback
-import asyncio
 import logging
 from datetime import datetime
 
@@ -24,6 +23,14 @@ def _now() -> str:
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 
+def _safe_str(value: str | None, default: str = "(trống)", max_len: int = 1000) -> str:
+    """Đảm bảo chuỗi không rỗng và không vượt quá max_len ký tự."""
+    text = (value or "").strip()
+    if not text:
+        return default
+    return text[:max_len] + ("…" if len(text) > max_len else "")
+
+
 async def _send_discord(payload: dict) -> None:
     """Gửi embed payload lên Discord Webhook (không raise nếu lỗi)."""
     if not config.DISCORD_WEBHOOK_URL:
@@ -36,8 +43,9 @@ async def _send_discord(payload: dict) -> None:
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 if resp.status not in (200, 204):
+                    body = await resp.text()
                     _log.warning(
-                        "Discord webhook trả về status %s", resp.status
+                        "Discord webhook trả về status %s: %s", resp.status, body[:300]
                     )
     except Exception as exc:  # noqa: BLE001
         _log.warning("Không gửi được Discord webhook: %s", exc)
@@ -54,27 +62,29 @@ async def log_success(
     Log thành công: người gửi, câu hỏi, câu trả lời, group, thời gian.
     """
     group_info = f"`{group_id}`" if group_id else "DM (nhắn riêng)"
-    short_q = question[:300] + ("…" if len(question) > 300 else "")
-    short_a = answer[:500] + ("…" if len(answer) > 500 else "")
+
+    # Đảm bảo giá trị không rỗng (Discord báo 400 nếu field value trống)
+    safe_name = _safe_str(sender_name, default=f"User({sender_id})", max_len=100)
+    safe_q = _safe_str(question, default="(không có nội dung)", max_len=500)
+    safe_a = _safe_str(answer, default="(không có câu trả lời)", max_len=800)
 
     _log.info(
-        "✅ [%s] %s (%s) → %s | %s",
+        "✅ [%s] %s → %s | %s",
         group_info,
-        sender_name,
-        sender_id,
-        short_q,
-        short_a,
+        safe_name,
+        safe_q,
+        safe_a,
     )
 
     embed = {
         "embeds": [
             {
                 "title": "✅ Bot đã trả lời",
-                "color": 0x2ECC71,
+                "color": 0x2ECC71,  # số nguyên hex — xanh lá
                 "fields": [
                     {
                         "name": "👤 Người gửi",
-                        "value": f"{sender_name} (`{sender_id}`)",
+                        "value": f"{safe_name} (`{sender_id}`)",
                         "inline": True,
                     },
                     {
@@ -84,12 +94,12 @@ async def log_success(
                     },
                     {
                         "name": "❓ Câu hỏi",
-                        "value": f"```{short_q}```",
+                        "value": f"```{safe_q}```",
                         "inline": False,
                     },
                     {
                         "name": "💬 Câu trả lời",
-                        "value": f"```{short_a}```",
+                        "value": f"```{safe_a}```",
                         "inline": False,
                     },
                 ],
@@ -116,21 +126,33 @@ async def log_error(
     if tb:
         _log.error(tb)
 
-    desc_parts = [f"**Context:** {context}"]
+    # Xây dựng description, đảm bảo không có trường nào rỗng
+    safe_context = _safe_str(context, default="Lỗi không xác định", max_len=200)
+    desc_parts = [f"**Context:** {safe_context}"]
+
     if exc:
-        desc_parts.append(f"**Lỗi:** `{type(exc).__name__}: {exc}`")
+        exc_str = _safe_str(f"{type(exc).__name__}: {exc}", max_len=300)
+        desc_parts.append(f"**Lỗi:** `{exc_str}`")
+
     if extra:
-        desc_parts.append(f"**Thêm:** {extra}")
+        safe_extra = _safe_str(extra, max_len=300)
+        desc_parts.append(f"**Thêm:** {safe_extra}")
+
     if tb:
-        tb_short = tb[-1500:]
+        tb_short = _safe_str(tb[-1200:], max_len=1200)
         desc_parts.append(f"**Traceback:**\n```\n{tb_short}\n```")
+
+    description = "\n".join(desc_parts)
+    # Discord giới hạn description 4096 ký tự
+    if len(description) > 4000:
+        description = description[:4000] + "\n…(cắt bớt)"
 
     embed = {
         "embeds": [
             {
                 "title": "❌ Bot gặp lỗi",
-                "description": "\n".join(desc_parts),
-                "color": 0xE74C3C,
+                "description": description,
+                "color": 0xE74C3C,  # số nguyên hex — đỏ
                 "footer": {"text": f"🕒 {_now()}"},
             }
         ]
@@ -141,12 +163,14 @@ async def log_error(
 async def log_info(message: str) -> None:
     """Log thông tin chung (startup, reconnect, v.v.)."""
     _log.info("ℹ️  %s", message)
+
+    safe_msg = _safe_str(message, default="(thông báo trống)", max_len=2000)
     embed = {
         "embeds": [
             {
                 "title": "ℹ️ Thông báo Bot",
-                "description": message,
-                "color": 0x3498DB,
+                "description": safe_msg,
+                "color": 0x3498DB,  # số nguyên hex — xanh dương
                 "footer": {"text": f"🕒 {_now()}"},
             }
         ]
