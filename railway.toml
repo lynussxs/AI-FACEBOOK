@@ -1,6 +1,7 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "nix-env -iA nixpkgs.python311 nixpkgs.python311Packages.pip && pip install -r facebook-bot/requirements.txt --break-system-packages"
+providers = ["python"]
+buildCommand = "pip install -r facebook-bot/requirements.txt --break-system-packages"
 
 [deploy]
 startCommand = "python3 -u facebook-bot/main.py"
