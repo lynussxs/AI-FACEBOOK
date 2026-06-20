@@ -4,7 +4,29 @@ Khởi động bot với auto-reconnect khi mất kết nối.
 """
 
 import asyncio
+import os
 import sys
+from pathlib import Path
+
+
+def _bootstrap_cookies() -> None:
+    """
+    Tự động tạo cookies.json từ biến môi trường FB_COOKIES_DATA.
+    Chỉ chạy khi file chưa tồn tại hoặc rỗng — dùng khi deploy trên Railway.
+    """
+    cookies_file = Path(os.environ.get("COOKIES_FILE", "cookies.json"))
+    cookies_data = os.environ.get("FB_COOKIES_DATA", "").strip()
+
+    if not cookies_data:
+        return  # Không có biến môi trường → bỏ qua
+
+    # Chỉ ghi nếu file chưa tồn tại hoặc đang rỗng {}
+    if not cookies_file.exists() or cookies_file.read_text(encoding="utf-8").strip() in ("", "{}"):
+        cookies_file.write_text(cookies_data, encoding="utf-8")
+        print(f"[BOOT] ✅ Đã tạo {cookies_file} từ biến môi trường FB_COOKIES_DATA")
+    else:
+        print(f"[BOOT] ℹ️  {cookies_file} đã tồn tại — bỏ qua FB_COOKIES_DATA")
+
 
 import config
 import logger
@@ -65,13 +87,17 @@ async def run_bot() -> None:
 
 def main():
     """Entry point."""
-    # Validate config khi khởi động
+    # Bước 1: Tạo cookies.json từ env var nếu cần (Railway deploy)
+    _bootstrap_cookies()
+
+    # Bước 2: Validate config
     try:
         config.validate()
     except EnvironmentError as exc:
         print(f"❌ Lỗi cấu hình:\n{exc}")
         sys.exit(1)
 
+    # Bước 3: Chạy bot
     try:
         asyncio.run(run_bot())
     except KeyboardInterrupt:
