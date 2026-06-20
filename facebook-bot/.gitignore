@@ -1,26 +1,28 @@
-# Biến môi trường — KHÔNG commit lên Git
+# ─── Môi trường — TUYỆT ĐỐI không commit ──────────────────────────────────────
 .env
 
-# Cookies Facebook — chứa session nhạy cảm
-# (commit cookies.json rỗng {} để Railway nhận diện file)
-# cookies.json  ← bỏ comment dòng này nếu không muốn commit cookies
+# ─── Cookies Facebook — chứa session đăng nhập nhạy cảm ───────────────────────
+# QUAN TRỌNG: Chỉ commit cookies.json khi file còn rỗng {} (dùng để Railway nhận diện)
+# Khi bạn đã điền cookies thật, bỏ comment dòng dưới để chặn:
+# cookies.json
 
-# Python cache
+# ─── Python cache ──────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .Python
 
-# Virtual environment
+# ─── Virtual environment ───────────────────────────────────────────────────────
 venv/
 env/
 .venv/
+.python-version
 
-# Logs
+# ─── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 bot.log
 
-# OS
+# ─── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

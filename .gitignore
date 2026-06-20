@@ -47,3 +47,30 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# ─── Facebook AI Bot ───────────────────────────────────────────────────────────
+# File môi trường — chứa API key, KHÔNG được commit
+facebook-bot/.env
+.env
+
+# Cookies Facebook — chứa session đăng nhập nhạy cảm
+# File cookies.json THẬT (có dữ liệu) sẽ bị block bởi facebook-bot/.gitignore
+# Thêm dòng này để bảo vệ thêm ở cấp root
+facebook-bot/cookies.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pycache
+
+# Virtual environment
+venv/
+env/
+.venv/
+.python-version
+
+# Python logs
+*.log
+bot.log
