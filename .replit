@@ -26,3 +26,18 @@ externalPort = 80
 [[ports]]
 localPort = 8081
 externalPort = 8081
+
+[userenv]
+
+[userenv.shared]
+BOT_NAME = "@MyAI"
+MODEL_NAME = "google/gemini-flash-1.5"
+TEMPERATURE = "0.7"
+MAX_TOKENS = "1000"
+MAX_CONTEXT_MESSAGES = "10"
+GROUP_IDS = "[]"
+ALLOWED_USER_IDS = "[]"
+COOKIES_FILE = "cookies.json"
+RECONNECT_DELAY = "10"
+MAX_RECONNECT_ATTEMPTS = "0"
+SYSTEM_PROMPT = "Bạn là một AI thông minh và thân thiện. Hãy trả lời bằng tiếng Việt, ngắn gọn và hữu ích."
