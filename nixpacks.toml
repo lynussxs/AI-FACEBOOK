@@ -1,2 +1,0 @@
-[install]
-cmds = ["pip install -r facebook-bot/requirements.txt --break-system-packages"]
